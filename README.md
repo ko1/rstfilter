@@ -47,6 +47,17 @@ Usage: rstfilter [options] SCRIPT
         --verbose                    Verbose mode
 ```
 
+## Advanced demo
+
+https://user-images.githubusercontent.com/9558/170426066-e0c19185-10e9-4932-a1ce-3088a4189b34.mp4
+
+This video shows advanced usage to show the results with modified script immediately.
+
+* [kv](https://rubygems.org/gems/kv) is another pager.
+* `kv -w SCRIPT` monitors SCRIPT file modification and reload it immediately.
+* `kv --filter-process=cmd SCRIPT` shows the result of `cmd FILE` as a filter.
+* Combination: `kv -w --filter-command='rstfilter -a' SCRIPT` shows modified script with execution results.
+
 ## Implementation
 
 With parser gem, rstfilter translates the given script and run it.
