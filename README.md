@@ -81,3 +81,8 @@ Bug reports and pull requests are welcome on GitHub at https://github.com/ko1/rs
 ## License
 
 The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
+
+## Aside
+
+* My motivation of this tool is to make it easy to annotate the script with execution results. For example, Ruby developer's meeting generates many code like: https://github.com/ruby/dev-meeting-log/blob/master/DevMeeting-2022-05-19.md
+* The name "Rst" stands for "Result". This tool is inspired from [xmpfilter](https://github.com/rcodetools/rcodetools/blob/master/lib/rcodetools/xmpfilter.rb) and original author Gotoken-san told me that "xmp" is stand for "Example" (he had wanted to make a support tool for lectures). Respect to the "xmp" mysterious word, I choosed "Rst".
