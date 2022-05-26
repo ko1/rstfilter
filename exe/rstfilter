@@ -1,0 +1,12 @@
+#!/usr/bin/env ruby
+
+begin
+  require 'rstfilter'
+rescue LoadError
+  $:.unshift File.expand_path('../lib', __dir__)
+  require 'rstfilter'
+end
+
+f = RstFilter::Exec.new
+f.optparse! ARGV
+ARGV.each{|name| f.process name}
