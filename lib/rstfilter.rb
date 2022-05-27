@@ -23,8 +23,12 @@ module RstFilter
 
     def process node
       return unless node
+
       case node.type
-      when :resbody, :rescue, :begin
+      when :resbody, :rescue,
+           :ensure,
+           :begin,
+           :splat
         # skip
       when :def, :class
         add_record node if @decl
@@ -33,6 +37,16 @@ module RstFilter
       end
 
       super
+    end
+
+    def on_dstr node
+    end
+
+    def on_masgn node
+      _mlhs, rhs = node.children
+      if rhs.type == :array
+        rhs.children.each{|r| process r}
+      end
     end
 
     def on_class node
@@ -56,7 +70,36 @@ module RstFilter
       process body
     end
 
+    def process_pairs pairs
+      pairs.each{|pair|
+        key, val = pair.children
+        if key.type != :sym
+          process key
+        end
+        process val
+      }
+    end
+
+    def on_hash node
+      process_pairs node.children
+    end
+
     def on_send node
+      recv, _name, *args = *node.children
+      process recv if recv
+
+      args.each{|arg|
+        if arg.type == :hash
+          process_pairs arg.children
+        else
+          process arg
+        end
+      }
+    end
+
+    def on_block node
+      send, args, block = *node.children
+      process block
     end
   end
 
@@ -81,7 +124,7 @@ module RstFilter
       opt = @opt.to_h.merge(opt)
       @opt = ConfigOption.new(**opt)
     end
-    
+
     def initialize
       @opt = ConfigOption.new(**DEFAULT_SETTING)
     end
@@ -173,29 +216,60 @@ module RstFilter
     end
 
     $__rst_record = Hash.new{|h, k| h[k] = []}
+    $captured_out = nil
+    $captured_err = nil
+
+    def err msg
+      msg.each_line{|line|
+        STDERR.puts "[RstFilter] #{line}"
+      }
+    end
+
+    def puts_result prefix, r, line = nil
+      if @opt.use_pp
+        result_lines = PP.pp(r, '').lines
+      else
+        result_lines = r.inspect.lines
+      end
+
+      if line
+        puts line.sub(/#{@opt.comment_pattern}.*$/, "#{@opt.comment_pattern} #{result_lines.shift.chomp}")
+      else
+        puts "#{prefix} #=> #{result_lines.shift}"
+      end
+
+      cont_comment = '#' + ' ' * @opt.comment_pattern.size
+      result_lines.each{|result_line|
+        puts ' ' * prefix.size + "#{cont_comment}#{result_line}"
+      }
+    end
 
     def process filename
       @filename = filename
-
-      code = File.read(filename)
+      src = File.read(filename)
 
       begin
-        ast, comments = Parser::CurrentRuby.parse_with_comments(code)
-      rescue Parser::SyntaxError => e
-        puts e
+        prev_v, $VERBOSE = $VERBOSE, false
+        ast = RubyVM::AbstractSyntaxTree.parse(src)
+        $VERBOSE = prev_v
+        last_lineno = ast.last_lineno
+      rescue SyntaxError => e
+        err e.inspect
         exit 1
       end
 
-      end_line = ast.loc.expression.end.line
-      code = code.lines[0..end_line].join # remove __END__ and later
-
+      # rewrite
+      src           = src.lines[0..last_lineno].join # remove __END__ and later
+      ast, comments = Parser::CurrentRuby.parse_with_comments(src)
       buffer        = Parser::Source::Buffer.new('(example)')
-      buffer.source = code
+      buffer.source = src
       rewriter      = RecordAll.new @opt
+      mod_src       = rewriter.rewrite(buffer, ast)
 
-      mod_src = rewriter.rewrite(buffer, ast)
+      pp ast if @opt.verbose
       puts mod_src.lines.map.with_index{|line, i| '%4d: %s' % [i+1, line] } if @opt.verbose
 
+      # execute modified src
       begin
         capture_out do
           record_rescue do
@@ -204,57 +278,32 @@ module RstFilter
         end
       rescue Exception => e
         if @opt.verbose
-          STDERR.puts e
-          STDERR.puts e.backtrace
+          err e.inspect
+          err e.backtrace.join("\n")
         else
-          STDERR.puts "RstFilter: exit with #{e.inspect}"
+          err "exit with #{e.inspect}"
         end
       end
 
-      replace_comments = {}
-
-      comments.each{|c|
+      replace_comments = comments.filter_map{|c|
         next unless c.text.start_with? @opt.comment_pattern
         e = c.loc.expression
-        line, _col = e.begin.line, e.begin.column
-        if $__rst_record.has_key? line
-          result = $__rst_record[line].last
-          replace_comments[line] = result
-        end
-      }
+        [e.begin.line, true]
+      }.to_h
 
       pp $__rst_record if @opt.verbose
 
-      code.each_line.with_index{|line, i|
-        line_result = $__rst_record[i+1]&.last
+      src.each_line.with_index{|line, i|
+        lineno = i+1
+        line_result = $__rst_record[lineno]&.last
 
-        if line_result && line.match(/(.+)#{@opt.comment_pattern}.*$/)
-          prefix = $1
-          r = line_result.first
-          if @opt.use_pp
-            result_lines = PP.pp(r, '').lines
-          else
-            result_lines = r.inspect.lines
-          end
-          puts line.sub(/#{@opt.comment_pattern}.*$/, "#{@opt.comment_pattern} #{result_lines.shift.chomp}")
-          cont_comment = '#' + ' ' * @opt.comment_pattern.size
-          result_lines.each{|result_line|
-            puts ' ' * prefix.size + "#{cont_comment}#{result_line}"
-          }
+        if line_result && replace_comments[lineno]
+          line.match(/(.+)#{@opt.comment_pattern}.*$/) || raise("unreachable")
+          puts_result $1, line_result.first, line
         elsif @opt.show_all_results && line_result
-          r = line_result.first
           indent = ' ' * [@opt.comment_indent - line.chomp.length, 0].max
-          if @opt.use_pp
-            result_lines = PP.pp(r, '').lines
-          else
-            result_lines = r.inspect.lines
-          end
           prefix = line.chomp.concat "#{indent}"
-          puts "#{prefix} #=> #{result_lines.shift}"
-          cont_comment = '#' + ' ' * @opt.comment_pattern.size
-          result_lines.each{|result_line|
-            puts ' ' * prefix.size + " #{cont_comment}#{result_line}"
-          }
+          puts_result prefix, line_result.first
         else
           puts line
         end
@@ -281,7 +330,7 @@ end
 
 if __FILE__ == $0
   filter = RstFilter::Exec.new
-  filter.optparse ARGV
-  file = ARGV.shift
+  filter.optparse! ['-o', '-v']
+  file = ARGV.shift || '../sample.rb'
   filter.process File.expand_path(file)
 end
