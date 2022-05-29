@@ -25,13 +25,29 @@ module RstFilter
       return unless node
 
       case node.type
-      when :resbody, :rescue,
+      when :begin,
+           :resbody, :rescue,
            :ensure,
-           :begin,
-           :splat
+           :return,
+           :next,
+           :redo,
+           :retry,
+           :splat,
+           :when
         # skip
       when :def, :class
         add_record node if @decl
+      when :lvasgn
+        _name, rhs = node.children
+        if rhs
+          add_record node
+        else
+          return
+        end
+      when :if
+        unless node.loc.expression.source.start_with? 'elsif'
+          add_record node
+        end
       else
         add_record node
       end
@@ -40,6 +56,12 @@ module RstFilter
     end
 
     def on_dstr node
+    end
+
+    def on_regexp node
+    end
+
+    def on_const node
     end
 
     def on_masgn node
@@ -52,6 +74,11 @@ module RstFilter
     def on_class node
       _name, sup, body = node.children
       process sup
+      process body
+    end
+
+    def on_module node
+      _name, body = node.children
       process body
     end
 
