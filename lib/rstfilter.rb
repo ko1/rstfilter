@@ -17,7 +17,7 @@ module RstFilter
     def add_record node
       if le = node&.location&.expression
         insert_before(le.begin, '(')
-        insert_after(le.end, ").__rst_record__(#{le.end.line}, #{le.end.column})")
+        insert_after(le.end, ").__rst_record__(#{[le.begin.line, le.begin.column, le.end.line, le.end.column].join(',')})")
       end
     end
 
@@ -33,17 +33,11 @@ module RstFilter
            :redo,
            :retry,
            :splat,
+           :lvasgn,
            :when
         # skip
       when :def, :class
         add_record node if @decl
-      when :lvasgn
-        _name, rhs = node.children
-        if rhs
-          add_record node
-        else
-          return
-        end
       when :if
         unless node.loc.expression.source.start_with? 'elsif'
           add_record node
@@ -125,7 +119,7 @@ module RstFilter
     end
 
     def on_block node
-      send, args, block = *node.children
+      _send, _args, block = *node.children
       process block
     end
   end
@@ -228,15 +222,14 @@ module RstFilter
     end
 
     class ::BasicObject
-      def __rst_record__ line, col
+      def __rst_record__ begin_line, begin_col, end_line, end_col
         out, err = *[$captured_out, $captured_err].map{|o|
           str = o.string
           o.string = ''
           str
         } if $captured_out
 
-        # ::STDERR.puts [line, col, self, out, err].inspect
-        $__rst_record[line][col] = [self, out, err]
+        $__rst_record[end_line][end_col] = [self, out, err]
 
         self
       end
