@@ -1,11 +1,40 @@
 require "test_helper"
+require 'rbconfig'
 
 class RstfilterTest < Minitest::Test
-  def test_that_it_has_a_version_number
-    refute_nil ::Rstfilter::VERSION
+  def setup
+    @filter = RstFilter::Exec.new
   end
 
-  def test_it_does_something_useful
-    assert false
+  def mod_src_check_file f
+    mod_src_check File.read(f), f
+  end
+
+  def mod_src_check src, filename = nil
+    mod_src, _comments = @filter.modified_src src
+    begin
+      ast = RubyVM::AbstractSyntaxTree.parse(mod_src)
+    rescue SyntaxError => e
+      assert false, "#{filename}:\n#{e}"
+    end
+    assert ast, "#{filename} should be nonnull"
+  end
+
+  def test_mod_src_self
+    Dir.glob(File.join(__dir__, '../**/*.rb')){|f|
+      mod_src_check_file f
+    }
+
+    if dir = ENV['RSTFILTER_TEST_SRCDIR']
+      Dir.glob(File.join(dir, '**/*.rb')){|f|
+        mod_src_check_file f
+      }
+    end
+  end
+
+  def test_mod_src_ruby
+    Dir.glob(File.join(RbConfig::CONFIG['libdir'], '**/*.rb')){|f|
+      mod_src_check_file f
+    }
   end
 end

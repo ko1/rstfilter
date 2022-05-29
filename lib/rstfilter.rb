@@ -21,6 +21,13 @@ module RstFilter
       end
     end
 
+    def add_paren node
+      if le = node&.location&.expression
+        insert_before(le.begin, '(')
+        insert_after(le.end, ")")
+      end
+    end
+
     def process node
       return unless node
 
@@ -33,6 +40,7 @@ module RstFilter
            :redo,
            :retry,
            :splat,
+           :block_pass,
            :lvasgn,
            :when
         # skip
@@ -76,8 +84,7 @@ module RstFilter
       process body
     end
 
-    def on_def node
-      _name, args, body = node.children
+    def process_args args
       args.children.each{|arg|
         case arg.type
         when :optarg
@@ -88,6 +95,19 @@ module RstFilter
           process kwexpr
         end
       }
+    end
+
+    def on_def node
+      _name, args, body = node.children
+      process_args args
+      process body
+    end
+
+    def on_defs node
+      recv, _name, args, body = node.children
+      process recv
+      add_paren recv
+      process_args args
       process body
     end
 
@@ -264,10 +284,7 @@ module RstFilter
       }
     end
 
-    def process filename
-      @filename = filename
-      src = File.read(filename)
-
+    def modified_src src
       begin
         prev_v, $VERBOSE = $VERBOSE, false
         ast = RubyVM::AbstractSyntaxTree.parse(src)
@@ -288,6 +305,14 @@ module RstFilter
 
       pp ast if @opt.verbose
       puts mod_src.lines.map.with_index{|line, i| '%4d: %s' % [i+1, line] } if @opt.verbose
+
+      return mod_src, comments
+    end
+
+    def process filename
+      @filename = filename
+      src = File.read(filename)
+      mod_src, comments = modified_src src
 
       # execute modified src
       begin
