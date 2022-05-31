@@ -41,9 +41,15 @@ Usage: rstfilter [options] SCRIPT
     -o, --output                     Show output results
     -d, --decl                       Show results on declaration
         --no-exception               Do not show exception
-    -a, --all                        Show all results/output
         --pp                         Use pp to represent objects
+    -n, --nextline                   Put comments on next line
         --comment-indent=NUM         Specify comment indent size (default: 50)
+        --comment-pattern=PAT        Specify comment pattern of -c (default: '#=>')
+        --coment-label=LABEL         Specify comment label (default: "")
+    -e, --command=COMMAND            Execute Ruby script with given command
+        --no-filename                Execute -e command without filename
+    -j, --json                       Print records in JSON format
+        --ignore-pragma              Ignore pragma specifiers
         --verbose                    Verbose mode
 ```
 
