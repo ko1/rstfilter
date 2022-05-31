@@ -28,16 +28,20 @@ module RstFilter
       comment_label: nil,
 
       # execute options
-      verbose: false,
       exec_command: false, # false: simply load file
                            # String value: launch given string as a command
       exec_with_filename: true,
 
       # dump
       dump: nil, # :json
+
+      # general
+      verbose: false,
+      ignore_pragma: false,
     }
 
     ConfigOption = Struct.new(*DEFAULT_SETTING.keys, keyword_init: true)
+    Command = Struct.new(:label, :command)
 
     def optparse! argv
       opt = {}
@@ -72,19 +76,29 @@ module RstFilter
       o.on('--verbose', 'Verbose mode'){
         opt[:verbose] = true
       }
-      o.on('-e', '--command=COMMAND', 'Execute Ruby script with given command'){|cmd|
-        if /\A(.+):(.+)\z/ =~ cmd
-          opt[:comment_label] = $1
-          opt[:exec_command] = $2
+      o.on('-e', '--command=COMMAND', 'Execute Ruby script with given command'){|cmdstr|
+        if /\A(.+):(.+)\z/ =~ cmdstr
+          cmd = Command.new($1, $2)
         else
-          opt[:exec_command] = cmd
+          opt[:exec_command] = Command.new(nil, cmdstr)
         end
+
+        opt[:exec_command] ||= []
+        opt[:exec_command] << cmd
+
+        opt[:comment_nextline] = true if opt[:exec_command].size > 1
       }
       o.on('--no-filename', 'Execute -e command without filename'){
         opt[:exec_with_filename] = false
       }
       o.on('-j', '--json', 'Print records in JSON format'){
         opt[:dump] = :json
+      }
+      o.on('--ignore-pragma', 'Ignore pragma specifiers'){
+        opt[:ignore_pragma] = true
+      }
+      o.on('--verbose', 'Verbose mode'){
+        opt[:verbose] = true
       }
       o.parse!(argv)
       update_opt opt
@@ -102,35 +116,55 @@ module RstFilter
       end
     end
 
-    def puts_result prefix, r, line = nil
-      if @opt.use_pp
-        result_lines = PP.pp(r, '').lines
-      else
-        result_lines = r.inspect.lines
-      end
+    def puts_result prefix, results, line = nil
+      if results.size == 1
+        if @opt.use_pp
+          result_lines = PP.pp(r, '').lines
+        else
+          result_lines = r.inspect.lines
+        end
 
-      if @opt.comment_nextline
+        if @opt.comment_nextline
+          puts prefix
+          if prefix.match(/\A(\s+)/)
+            prefix = ' ' * $1.size
+          else
+            prefix = ''
+          end
+          puts "#{prefix}" + "#{@opt.comment_pattern}#{comment_label}#{result_lines.shift}"
+        else
+          if line
+            puts line.sub(/#{@opt.comment_pattern}.*$/, "#{@opt.comment_pattern} #{comment_label}#{result_lines.shift.chomp}")
+          else
+            indent = ' ' * [0, @opt.comment_indent - prefix.size].max
+            puts "#{prefix.chomp}#{indent} #=> #{comment_label}#{result_lines.shift}"
+          end
+        end
+
+        cont_comment = '#' + ' ' * @opt.comment_pattern.size
+
+        result_lines.each{|result_line|
+          puts ' ' * prefix.size + "#{cont_comment}#{result_line}"
+        }
+      else
         puts prefix
+
         if prefix.match(/\A(\s+)/)
           prefix = ' ' * $1.size
         else
           prefix = ''
         end
-        puts "#{prefix}" + "#{@opt.comment_pattern}#{comment_label}#{result_lines.shift}"
-      else
-        if line
-          puts line.sub(/#{@opt.comment_pattern}.*$/, "#{@opt.comment_pattern} #{comment_label}#{result_lines.shift.chomp}")
-        else
-          indent = ' ' * [0, @opt.comment_indent - prefix.size].max
-          puts "#{prefix.chomp}#{indent} #=> #{comment_label}#{result_lines.shift}"
-        end
+
+        results.each.with_index{|r, i|
+          if @opt.use_pp
+            result_lines = PP.pp(r, '').lines
+          else
+            result_lines = r.inspect.lines
+          end
+
+          puts "#{prefix}#{@opt.comment_pattern} #{@opt.exec_command[i].label}: #{result_lines.first}"
+        }
       end
-
-      cont_comment = '#' + ' ' * @opt.comment_pattern.size
-
-      result_lines.each{|result_line|
-        puts ' ' * prefix.size + "#{cont_comment}#{result_line}"
-      }
     end
 
     def exec_mod_src mod_src
@@ -139,36 +173,37 @@ module RstFilter
       ENV['RSTFILTER_SHOW_EXCEPTIONS'] = @opt.show_exceptions ? '1' : nil
       ENV['RSTFILTER_FILENAME'] = @filename
 
-      case @opt.exec_command
-      when String
-        require 'tempfile'
-        recf = Tempfile.new('rstfilter-rec')
-        ENV['RSTFILTER_RECORD_PATH'] = recf.path
-        recf.close
+      case cs = @opt.exec_command
+      when Array
+        cs.map do |c|
+          require 'tempfile'
+          recf = Tempfile.new('rstfilter-rec')
+          ENV['RSTFILTER_RECORD_PATH'] = recf.path
+          recf.close
 
-        modf = Tempfile.new('rstfilter-modsrc')
-        modf.write mod_src
-        modf.close
-        ENV['RSTFILTER_MOD_SRC_PATH'] = modf.path
+          modf = Tempfile.new('rstfilter-modsrc')
+          modf.write mod_src
+          modf.close
+          ENV['RSTFILTER_MOD_SRC_PATH'] = modf.path
 
-        ENV['RUBYOPT'] = "-r#{File.join(__dir__, 'exec_setup')} #{ENV['RUBYOPT']}"
+          ENV['RUBYOPT'] = "-r#{File.join(__dir__, 'exec_setup')} #{ENV['RUBYOPT']}"
 
-        cmd = @opt.exec_command
-        cmd << ' ' + @filename if @opt.exec_with_filename
-        p exec:cmd if @opt.verbose
-        system(cmd)
-        open(recf.path){|f| Marshal.load f}
+          cmd = c.command
+          cmd << ' ' + @filename if @opt.exec_with_filename
+          p exec:cmd if @opt.verbose
+          raise "can not launch '#{cmd}'" if system(cmd).nil?
+          open(recf.path){|f| Marshal.load f}
+        end
       else
         begin
           begin
             require_relative 'exec_setup'
             ::TOPLEVEL_BINDING.eval(mod_src, @filename)
-            $__rst_record
+            [$__rst_record]
           ensure
             $stdout = $__rst_filter_prev_out if $__rst_filter_prev_out
             $stderr = $__rst_filter_prev_err if $__rst_filter_prev_err
             $__rst_filter_raise_captor&.disable
-
           end
         rescue Exception => e
           if @opt.verbose
@@ -197,8 +232,7 @@ module RstFilter
         when /\A\#rstfilter\s(.+)/
           optparse! Shellwords.split($1)
         end
-      }
-      
+      } unless @opt.ignore_pragma
 
       records = exec_mod_src mod_src
       pp records: records if @opt.verbose
@@ -216,30 +250,37 @@ module RstFilter
 
         src.each_line.with_index{|line, i|
           lineno = i+1
-          line_result = records[lineno]&.last
+          line_results = records.map{|r| r[lineno]&.last}.compact
 
-          if line_result && replace_comments[lineno]
-            line.match(/(.+)#{@opt.comment_pattern}.*$/) || raise("unreachable")
-            puts_result $1, line_result.first, line
-          elsif @opt.show_all_results && line_result
-            puts_result line, line_result.first
-          else
+          if line_results.empty?
             puts line
+          else
+            if replace_comments[lineno]
+              line.match(/(.+)#{@opt.comment_pattern}.*$/) || raise("unreachable")
+              puts_result $1, line_results.map{|r| r.first}, line
+            elsif @opt.show_all_results
+              puts_result line, line_results.map{|r| r.first}
+            end
           end
 
-          if @opt.show_output && line_result
-            out, err = *line_result[1..2]
+          if @opt.show_output && !line_results.empty?
             if m = line.match(/^\s+/)
               indent = ' ' * m[0].size
             else
               indent = ''
             end
 
-            {out: out, err: err}.each{|k, o|
-              o.strip!
-              o.each_line{|ol|
-                puts "#{indent}##{k}: #{ol}"
-              } unless o.empty?
+            line_results.each.with_index{|r, i|
+              out, err = *r[1..2]
+              label = @opt.exec_command && @opt.exec_command[i].label
+              label += ':' if label
+
+              {out: out, err: err}.each{|k, o|
+                o.strip!
+                o.each_line{|ol|
+                  puts "#{indent}\##{label}#{k}: #{ol}"
+                } unless o.empty?
+              }
             }
           end
         }
@@ -251,7 +292,7 @@ end
 if $0 == __FILE__
   require_relative 'rewriter'
   filter = RstFilter::Exec.new
-  filter.optparse! ['-v', '-j']
+  filter.optparse! ['-v']
   file = ARGV.shift || File.expand_path(__dir__ + '/../../sample.rb')
   filter.process File.expand_path(file)
 end
