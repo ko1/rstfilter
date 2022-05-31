@@ -1,3 +1,5 @@
+[![GH Actions](https://github.com/ko1/rstfilter/actions/workflows/ruby.yml/badge.svg)](https://github.com/ko1/rstfilter/actions/workflows/ruby.yml)
+
 # Rstfilter
 
 This tool prints a Ruby script with execution results.
