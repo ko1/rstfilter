@@ -77,16 +77,15 @@ module RstFilter
         opt[:verbose] = true
       }
       o.on('-e', '--command=COMMAND', 'Execute Ruby script with given command'){|cmdstr|
+        opt[:exec_command] ||= []
+
         if /\A(.+):(.+)\z/ =~ cmdstr
           cmd = Command.new($1, $2)
         else
-          opt[:exec_command] = Command.new(nil, cmdstr)
+          cmd = Command.new("e#{(opt[:exec_command]&.size || 0) + 1}", cmdstr)
         end
 
-        opt[:exec_command] ||= []
         opt[:exec_command] << cmd
-
-        opt[:comment_nextline] = true if opt[:exec_command].size > 1
       }
       o.on('--no-filename', 'Execute -e command without filename'){
         opt[:exec_with_filename] = false
