@@ -11,7 +11,7 @@ b = 2
 c = a + b
 puts "Hello" * c
 
-$ rstfilter sample.rb -a
+$ rstfilter sample.rb -o
 a = 1                                              #=> 1
 b = 2                                              #=> 2
 c = a + b                                          #=> 3
@@ -54,6 +54,28 @@ Usage: rstfilter [options] SCRIPT
         --ignore-pragma              Ignore pragma specifiers
         --verbose                    Verbose mode
 ```
+
+Note that you can specify multiple `-e` options like that:
+
+```
+$ rstfilter -o sample.rb -eruby27:/home/ko1/.rbenv/versions/2.7.6/bin/ruby -e ruby30:/home/ko1/.rbenv/versions/3.0.4/bin/ruby
+a = 1
+#=> ruby27: 1
+#=> ruby30: 1
+b = 2
+#=> ruby27: 2
+#=> ruby30: 2
+c = a + b
+#=> ruby27: 3
+#=> ruby30: 3
+puts "Hello" * c
+#=> ruby27: nil
+#=> ruby30: nil
+#ruby27:out: HelloHelloHello
+#ruby30:out: HelloHelloHello
+```
+
+On this case, you can check results on multiple Ruby interpreters.
 
 ## Advanced demo
 
