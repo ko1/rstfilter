@@ -117,6 +117,7 @@ module RstFilter
 
     def puts_result prefix, results, line = nil
       if results.size == 1
+        r = results.first
         if @opt.use_pp
           result_lines = PP.pp(r, '').lines
         else
@@ -277,7 +278,7 @@ module RstFilter
               {out: out, err: err}.each{|k, o|
                 o.strip!
                 o.each_line{|ol|
-                  puts "#{indent}\##{label}#{k}: #{ol}"
+                  puts "#{indent}\##{label ? label : nil}#{k}: #{ol}"
                 } unless o.empty?
               }
             }
