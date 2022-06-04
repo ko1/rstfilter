@@ -198,6 +198,7 @@ module RstFilter
         begin
           begin
             require_relative 'exec_setup'
+            $__rst_record.clear
             ::TOPLEVEL_BINDING.eval(mod_src, @filename)
             [$__rst_record]
           ensure
@@ -222,7 +223,7 @@ module RstFilter
       rewriter.rewrite(src, filename)
     end
 
-    def process filename
+    def record_records filename
       @filename = filename
       src = File.read(filename)
       src, mod_src, comments = modified_src(src, filename)
@@ -234,7 +235,11 @@ module RstFilter
         end
       } unless @opt.ignore_pragma
 
-      records = exec_mod_src mod_src
+      return exec_mod_src(mod_src), src, comments
+    end
+
+    def process filename
+      records, src, comments = record_records filename
       pp records: records if @opt.verbose
 
       case @opt.dump
