@@ -116,13 +116,12 @@ module RstFilter
     end
 
     def puts_result prefix, results, line = nil
+      prefix = prefix.chomp
+
       if results.size == 1
         r = results.first
-        if @opt.use_pp
-          result_lines = PP.pp(r, '').lines
-        else
-          result_lines = r.inspect.lines
-        end
+        result_lines = r.lines
+        indent = ''
 
         if @opt.comment_nextline
           puts prefix
@@ -137,14 +136,14 @@ module RstFilter
             puts line.sub(/#{@opt.comment_pattern}.*$/, "#{@opt.comment_pattern} #{comment_label}#{result_lines.shift.chomp}")
           else
             indent = ' ' * [0, @opt.comment_indent - prefix.size].max
-            puts "#{prefix.chomp}#{indent} #=> #{comment_label}#{result_lines.shift}"
+            puts "#{prefix}#{indent} #=> #{comment_label}#{result_lines.shift}"
           end
         end
 
-        cont_comment = '#' + ' ' * @opt.comment_pattern.size
+        cont_comment = ' #' + ' ' * @opt.comment_pattern.size + ' '
 
         result_lines.each{|result_line|
-          puts ' ' * prefix.size + "#{cont_comment}#{result_line}"
+          puts ' ' * prefix.size + indent + "#{cont_comment}#{result_line}"
         }
       else
         puts prefix
@@ -156,12 +155,7 @@ module RstFilter
         end
 
         results.each.with_index{|r, i|
-          if @opt.use_pp
-            result_lines = PP.pp(r, '').lines
-          else
-            result_lines = r.inspect.lines
-          end
-
+          result_lines = r.lines
           puts "#{prefix}#{@opt.comment_pattern} #{@opt.exec_command[i].label}: #{result_lines.first}"
         }
       end
@@ -172,6 +166,7 @@ module RstFilter
       ENV['RSTFILTER_SHOW_OUTPUT'] = @opt.show_output ? '1' : nil
       ENV['RSTFILTER_SHOW_EXCEPTIONS'] = @opt.show_exceptions ? '1' : nil
       ENV['RSTFILTER_FILENAME'] = @filename
+      ENV['RSTFILTER_PP'] = @opt.use_pp ? '1' : nil
 
       case cs = @opt.exec_command
       when Array

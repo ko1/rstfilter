@@ -1,13 +1,32 @@
 require 'stringio'
 
 class ::BasicObject
+  if ::ENV['RSTFILTER_PP']
+    require 'pp'
+    def __rst_inspect_body__
+      ::PP.pp(self, '')
+    end
+  else
+    def __rst_inspect_body__
+      self.inspect
+    end
+  end
+
+  def __rst_inspect__
+    begin
+      __rst_inspect_body__
+    rescue Exception => e
+      "!! __rst_inspect__ failed: #{e}"
+    end
+  end
+
   def __rst_record__ begin_line, begin_col, end_line, end_col
     out, err = *[$__rst_filter_captured_out, $__rst_filter_captured_err].map{|o|
       str = o.string
       o.string = ''
       str
     } if $__rst_filter_captured_out
-    $__rst_record[end_line][end_col] = [self, out, err]
+    $__rst_record[end_line][end_col] = [self.__rst_inspect__, out, err]
     self
   end
 end
