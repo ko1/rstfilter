@@ -21,6 +21,7 @@ class ::BasicObject
   end
 
   def __rst_record__ begin_line, begin_col, end_line, end_col
+    # p [begin_line, begin_col, end_line, end_col]
     out, err = *[$__rst_filter_captured_out, $__rst_filter_captured_err].map{|o|
       str = o.string
       o.string = ''
@@ -76,8 +77,9 @@ if path = ENV['RSTFILTER_RECORD_PATH']
     RST_FILENAME = ENV['RSTFILTER_FILENAME']
     RST_MOD_SRC = File.read(ENV['RSTFILTER_MOD_SRC_PATH'])
     @found = false
+    p [RST_FILENAME, ENV['RSTFILTER_MOD_SRC_PATH']]
     def self.translate iseq
-      if !@found && iseq.path == RST_FILENAME # TODO: check top
+      if !@found && iseq.path == RST_FILENAME && iseq.label == "<main>"
         @found = true
         RubyVM::InstructionSequence.compile RST_MOD_SRC, RST_FILENAME
       end
