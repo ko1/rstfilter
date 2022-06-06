@@ -138,6 +138,10 @@ module RstFilter
       _send, _args, block = *node.children
       process block
     end
+
+    def on_numblock node
+      on_block node
+    end
   end
 
   class Rewriter
