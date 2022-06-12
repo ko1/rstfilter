@@ -198,7 +198,9 @@ module RstFilter
           ensure
             begin
               Process.kill(:KILL, io.pid)
-            rescue Errno::ESRCH
+            rescue Errno::ESRCH, Errno::ECHILD
+            else
+              Process.waitpid(io.pid)
             end
           end
 

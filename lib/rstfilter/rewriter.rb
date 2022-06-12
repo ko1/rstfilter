@@ -151,15 +151,11 @@ module RstFilter
     end
 
     def rewrite src, filename
-      begin
-        prev_v, $VERBOSE = $VERBOSE, false
-        ast = RubyVM::AbstractSyntaxTree.parse(src)
-        $VERBOSE = prev_v
-        last_lineno = ast.last_lineno
-      rescue SyntaxError => e
-        err e.inspect
-        exit 1
-      end
+      # check syntax
+      prev_v, $VERBOSE = $VERBOSE, false
+      ast = RubyVM::AbstractSyntaxTree.parse(src)
+      $VERBOSE = prev_v
+      last_lineno = ast.last_lineno
 
       # rewrite
       src           = src.lines[0..last_lineno].join # remove __END__ and later

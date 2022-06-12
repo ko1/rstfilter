@@ -4,6 +4,9 @@ require_relative '../rewriter'
 require_relative '../exec'
 
 module RstFilter
+  class CancelRequest < StandardError
+  end
+
   class LSP
     def initialize input: $stdin, output: $stdout, err: $stderr, indent: 50
       @input   = input
@@ -13,7 +16,7 @@ module RstFilter
       @records = {} # {filename => [record, line_record, src]}
       @server_request_id = 0
       @exit_status = 1
-      @running = {} # id for cancel
+      @running = {} # {filename => Thread}
     end
 
     def self.reload
@@ -238,7 +241,7 @@ module RstFilter
       send_notice 'rstfilter/start', {
         uri: filename,
       }
-      Thread.new do
+      @running[filename] = Thread.new do
         filter = RstFilter::Exec.new
         filter.optparse! ['--pp', '-eruby']
         records, src, _comments = filter.record_records(filename)
@@ -249,11 +252,25 @@ module RstFilter
           send_notice 'rstfilter/output', output: "# Output for #{filename}\n\n#{filter.output}"
         end
         send_request 'workspace/inlayHint/refresh'
+      rescue CancelRequest
+        # canceled
+      rescue SyntaxError => e
+        send_notice 'rstfilter/output', output: "SyntaxError on #{filename}:\n#{e.inspect}"
+        send_notice 'rstfilter/done'
+      rescue Exception => e
+        send_notice 'rstfilter/output', output: "Error on #{filename}:\n#{e.inspect}\n#{e.backtrace.join("\n")}#{filter.output}"
+        send_notice 'rstfilter/done'
+      ensure
+        @running[filename] = nil
       end
     end
 
     def clear_record filename
       @records[filename] = nil
+      if th = @running[filename]
+        @running[filename] = nil
+        th.raise CancelRequest
+      end
     end
 
     def uri2filename uri
@@ -280,7 +297,7 @@ module RstFilter
         filename = uri2filename req.dig(:params, :textDocument, :uri)
         clear_record filename
       when '$/cancelRequest'
-        # TODO: cancel
+        # ignore
       when 'exit'
         exit(@exit_code)
       else
