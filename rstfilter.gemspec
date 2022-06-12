@@ -2,7 +2,7 @@ require_relative 'lib/rstfilter/version'
 
 Gem::Specification.new do |spec|
   spec.name          = "rstfilter"
-  spec.version       = Rstfilter::VERSION
+  spec.version       = RstFilter::VERSION
   spec.authors       = ["Koichi Sasada"]
   spec.email         = ["ko1@atdot.net"]
 

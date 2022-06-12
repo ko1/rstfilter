@@ -12,8 +12,9 @@ module RstFilter
 
     def add_record node
       if le = node&.location&.expression
-        insert_before(le.begin, '(')
-        insert_after(le.end, ").__rst_record__(#{[le.begin.line, le.begin.column, le.end.line, le.end.column].join(',')})")
+        pos = [le.begin.line, le.begin.column, le.end.line, le.end.column].join(',')
+        insert_before(le.begin, "::RSTFILTER__.record(#{pos}){")
+        insert_after(le.end, "}")
       end
     end
 
@@ -26,6 +27,8 @@ module RstFilter
 
     def process node
       return unless node
+
+      super
 
       case node.type
       when :begin,
@@ -49,8 +52,6 @@ module RstFilter
       else
         add_record node
       end
-
-      super
     end
 
     def on_dstr node
@@ -168,8 +169,11 @@ module RstFilter
       rewriter      = RecordAll.new @opt
       mod_src       = rewriter.rewrite(buffer, ast)
 
-      pp ast if @opt.verbose
-      puts mod_src.lines.map.with_index{|line, i| '%4d: %s' % [i+1, line] } if @opt.verbose
+      if @opt.verbose
+        pp ast
+        puts "     #{(0...80).map{|i| i%10}.join}"
+        puts mod_src.lines.map.with_index{|line, i| '%4d:%s' % [i+1, line] }
+      end
 
       return src, mod_src, comments
     end

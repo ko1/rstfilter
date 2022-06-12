@@ -8,7 +8,10 @@ module RstFilter
       @opt = ConfigOption.new(**opt)
     end
 
+    attr_reader :output
+
     def initialize opt = {}
+      @output = ''
       @opt = ConfigOption.new(**DEFAULT_SETTING)
       update_opt opt
     end
@@ -170,6 +173,8 @@ module RstFilter
 
       case cs = @opt.exec_command
       when Array
+        @output = String.new
+
         cs.map do |c|
           require 'tempfile'
           recf = Tempfile.new('rstfilter-rec')
@@ -186,20 +191,30 @@ module RstFilter
           cmd = c.command
           cmd << ' ' + @filename if @opt.exec_with_filename
           p exec:cmd if @opt.verbose
-          raise "can not launch '#{cmd}'" if system(cmd).nil?
+
+          io = IO.popen(cmd, err: [:child, :out])
+          begin
+            Process.waitpid(io.pid)
+          ensure
+            begin
+              Process.kill(:KILL, io.pid)
+            rescue Errno::ESRCH
+            end
+          end
+
+          @output << io.read
           open(recf.path){|f| Marshal.load f}
         end
       else
         begin
           begin
             require_relative 'exec_setup'
-            $__rst_record.clear
+            ::RSTFILTER__.clear
             ::TOPLEVEL_BINDING.eval(mod_src, @filename)
-            [$__rst_record]
+            [::RSTFILTER__.records]
           ensure
             $stdout = $__rst_filter_prev_out if $__rst_filter_prev_out
             $stderr = $__rst_filter_prev_err if $__rst_filter_prev_err
-            $__rst_filter_raise_captor&.disable
           end
         rescue Exception => e
           if @opt.verbose
@@ -208,7 +223,7 @@ module RstFilter
           else
             err "exit with #{e.inspect}"
           end
-          raise
+          [::RSTFILTER__.records]
         end
       end
     end
@@ -233,9 +248,20 @@ module RstFilter
       return exec_mod_src(mod_src), src, comments
     end
 
+    def make_line_records rs
+      lrs = {}
+      rs.each{|(_bl, _bc, el, _ec), result|
+        lrs[el] = result
+      }
+      lrs
+    end
+
     def process filename
       records, src, comments = record_records filename
       pp records: records if @opt.verbose
+      line_records = records.map{|r|
+        make_line_records r
+      }
 
       case @opt.dump
       when :json
@@ -250,16 +276,16 @@ module RstFilter
 
         src.each_line.with_index{|line, i|
           lineno = i+1
-          line_results = records.map{|r| r[lineno]&.last}.compact
+          line_results = line_records.map{|r| r[lineno]&.first}.compact
 
           if line_results.empty?
             puts line
           else
             if replace_comments[lineno]
               line.match(/(.+)#{@opt.comment_pattern}.*$/) || raise("unreachable")
-              puts_result $1, line_results.map{|r| r.first}, line
+              puts_result $1, line_results, line
             elsif @opt.show_all_results
-              puts_result line, line_results.map{|r| r.first}
+              puts_result line, line_results
             end
           end
 
@@ -270,7 +296,8 @@ module RstFilter
               indent = ''
             end
 
-            line_results.each.with_index{|r, i|
+            line_outputs = line_records.map{|r| r[lineno]}.compact
+            line_outputs.each.with_index{|r, i|
               out, err = *r[1..2]
               label = @opt.exec_command && @opt.exec_command[i].label
               label += ':' if label
@@ -284,6 +311,11 @@ module RstFilter
             }
           end
         }
+
+        if !@opt.show_output && !@output.empty?
+          puts "# output"
+          puts output
+        end
       end
     end
   end
