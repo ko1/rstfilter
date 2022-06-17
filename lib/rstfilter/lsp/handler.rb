@@ -131,7 +131,7 @@ module RstFilter
             textDocumentSync: {
               openClose: true,
               change: 2, # Incremental
-              save: true,
+              # save: true,
             },
 
             inlineValueProvider: true,
@@ -238,7 +238,7 @@ module RstFilter
     end
 
     def take_record filename
-      send_notice 'rstfilter/start', {
+      send_notice 'rstfilter/started', {
         uri: filename,
       }
       @running[filename] = Thread.new do
@@ -290,12 +290,16 @@ module RstFilter
         }
       when 'textDocument/didOpen',
            'textDocument/didSave'
-        filename = uri2filename req.dig(:params, :textDocument, :uri)
-        take_record filename
+        #filename = uri2filename req.dig(:params, :textDocument, :uri)
+        #take_record filename
+        # do nothing
       when 'textDocument/didClose',
            'textDocument/didChange'
         filename = uri2filename req.dig(:params, :textDocument, :uri)
         clear_record filename
+      when 'rstfilter/start'
+        filename = req.dig(:params, :path)
+        take_record filename
       when '$/cancelRequest'
         # ignore
       when 'exit'
