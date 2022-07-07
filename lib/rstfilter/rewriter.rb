@@ -151,14 +151,23 @@ module RstFilter
     end
 
     def rewrite src, filename
-      # check syntax
-      prev_v, $VERBOSE = $VERBOSE, false
-      ast = RubyVM::AbstractSyntaxTree.parse(src)
-      $VERBOSE = prev_v
-      last_lineno = ast.last_lineno
+      # only MRI defines RubyVM::AbstractSyntaxTree.parse
+      if defined?(RubyVM::AbstractSyntaxTree.parse)
+        # if RubyVM::AbstractSyntaxTree.parse is available we can use it to
+        # pre-parse to check syntax and find the last line of actual code,
+        # excluding __END__ and later
+
+        # check syntax and find the last line
+        prev_v, $VERBOSE = $VERBOSE, false
+        ast = RubyVM::AbstractSyntaxTree.parse(src)
+        $VERBOSE = prev_v
+        last_lineno = ast.last_lineno
+        
+        # remove __END__ and later
+        src = src.lines[0..last_lineno].join
+      end
 
       # rewrite
-      src           = src.lines[0..last_lineno].join # remove __END__ and later
       ast, comments = Parser::CurrentRuby.parse_with_comments(src)
       buffer        = Parser::Source::Buffer.new('(example)')
       buffer.source = src
