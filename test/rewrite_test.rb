@@ -1,9 +1,9 @@
-require "test_helper"
+require_relative "test_helper"
 require 'rbconfig'
 
-class RstfilterTest < Minitest::Test
+class RewriteTest < Minitest::Test
   def setup
-    @filter = RstFilter::Exec.new
+    @rewriter = RstFilter::Rewriter.new(RstFilter::Config::DEFAULT)
   end
 
   def mod_src_check_file f
@@ -12,9 +12,9 @@ class RstfilterTest < Minitest::Test
 
   def mod_src_check src, filename = nil
     begin
-      mod_src, _comments = @filter.modified_src src
+      mod_src, _comments = @rewriter.rewrite src, filename
       ast = RubyVM::AbstractSyntaxTree.parse(mod_src)
-    rescue Parser::SyntaxError
+    rescue Parser::SyntaxError, EncodingError
       # memo: https://github.com/whitequark/parser/issues/854
       ast = true
     rescue SyntaxError => e
@@ -27,7 +27,9 @@ class RstfilterTest < Minitest::Test
     Dir.glob(File.join(__dir__, '../**/*.rb')){|f|
       mod_src_check_file f
     }
+  end
 
+  def test_mod_src_srcdir
     if dir = ENV['RSTFILTER_TEST_SRCDIR']
       Dir.glob(File.join(dir, '**/*.rb')){|f|
         mod_src_check_file f

@@ -7,6 +7,8 @@ rescue LoadError
   require 'rstfilter'
 end
 
-f = RstFilter::Exec.new
-f.optparse! ARGV
-ARGV.each{|name| f.process name}
+RstFilter::Config.set_default! ARGV
+ARGV.each{|name|
+  f = RstFilter::Exec.new name
+  f.process
+}

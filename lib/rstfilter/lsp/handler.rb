@@ -242,9 +242,9 @@ module RstFilter
         uri: filename,
       }
       @running[filename] = Thread.new do
-        filter = RstFilter::Exec.new
-        filter.optparse! ['--pp', '-eruby']
-        records, src, _comments = filter.record_records(filename)
+        filter = RstFilter::Exec.new(filename)
+        filter.update_option ['--pp', '-eruby']
+        records, src, _comments = filter.record_records
         records = records.first # only 1 process results
         @records[filename] = [records, filter.make_line_records(records), src]
         send_notice 'rstfilter/done'

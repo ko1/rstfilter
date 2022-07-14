@@ -2,4 +2,5 @@
 
 require_relative '../lib/rstfilter/lsp/handler'
 
+RstFilter::Config.set_default! ARGV
 RstFilter::LSP.new.start

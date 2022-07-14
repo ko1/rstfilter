@@ -1,109 +1,21 @@
+# frozen_string_literal: true
+
 require 'optparse'
-require 'shellwords'
+require_relative 'config'
 
 module RstFilter
   class Exec
-    def update_opt opt = {}
-      opt = @opt.to_h.merge(opt)
-      @opt = ConfigOption.new(**opt)
-    end
-
     attr_reader :output
 
-    def initialize opt = {}
+    def initialize filename, src = nil, **opt
+      @src = src
       @output = ''
-      @opt = ConfigOption.new(**DEFAULT_SETTING)
-      update_opt opt
+      @filename = filename
+      @opt = Config.new filename
     end
 
-    DEFAULT_SETTING = {
-      # rewrite options
-      show_all_results: true,
-      show_exceptions: true,
-      show_output: false,
-      show_decl: false,
-      show_specific_line: nil,
-
-      use_pp: false,
-      comment_nextline: false,
-      comment_indent: 50,
-      comment_pattern: '#=>',
-      comment_label: nil,
-
-      # execute options
-      exec_command: false, # false: simply load file
-                           # String value: launch given string as a command
-      exec_with_filename: true,
-
-      # dump
-      dump: nil, # :json
-
-      # general
-      verbose: false,
-      ignore_pragma: false,
-    }
-
-    ConfigOption = Struct.new(*DEFAULT_SETTING.keys, keyword_init: true)
-    Command = Struct.new(:label, :command)
-
-    def optparse! argv
-      opt = {}
-      o = OptionParser.new
-      o.on('-c', '--comment', 'Show result only on comment'){
-        opt[:show_all_results] = false
-      }
-      o.on('-o', '--output', 'Show output results'){
-        opt[:show_output] = true
-      }
-      o.on('-d', '--decl', 'Show results on declaration'){
-        opt[:show_decl] = true
-      }
-      o.on('--no-exception', 'Do not show exception'){
-        opt[:show_exception] = false
-      }
-      o.on('--pp', 'Use pp to represent objects'){
-        opt[:use_pp] = true
-      }
-      o.on('-n', '--nextline', 'Put comments on next line'){
-        opt[:comment_nextline] = true
-      }
-      o.on('--comment-indent=NUM', "Specify comment indent size (default: #{DEFAULT_SETTING[:comment_indent]})"){|n|
-        opt[:comment_indent] = n.to_i
-      }
-      o.on('--comment-pattern=PAT', "Specify comment pattern of -c (default: '#=>')"){|pat|
-        opt[:comment_pattern] = pat
-      }
-      o.on('--coment-label=LABEL', 'Specify comment label (default: "")'){|label|
-        opt[:comment_label] = label
-      }
-      o.on('--verbose', 'Verbose mode'){
-        opt[:verbose] = true
-      }
-      o.on('-e', '--command=COMMAND', 'Execute Ruby script with given command'){|cmdstr|
-        opt[:exec_command] ||= []
-
-        if /\A(.+):(.+)\z/ =~ cmdstr
-          cmd = Command.new($1, $2)
-        else
-          cmd = Command.new("e#{(opt[:exec_command]&.size || 0) + 1}", cmdstr)
-        end
-
-        opt[:exec_command] << cmd
-      }
-      o.on('--no-filename', 'Execute -e command without filename'){
-        opt[:exec_with_filename] = false
-      }
-      o.on('-j', '--json', 'Print records in JSON format'){
-        opt[:dump] = :json
-      }
-      o.on('--ignore-pragma', 'Ignore pragma specifiers'){
-        opt[:ignore_pragma] = true
-      }
-      o.on('--verbose', 'Verbose mode'){
-        opt[:verbose] = true
-      }
-      o.parse!(argv)
-      update_opt opt
+    def update_option args
+      @opt.update_args args
     end
 
     def err msg
@@ -235,15 +147,14 @@ module RstFilter
       rewriter.rewrite(src, filename)
     end
 
-    def record_records filename
-      @filename = filename
-      src = File.read(filename)
-      src, mod_src, comments = modified_src(src, filename)
+    def record_records
+      src = @src || File.read(@filename)
+      src, mod_src, comments = modified_src(src, @filename)
 
       comments.each{|c|
         case c.text
         when /\A\#rstfilter\s(.+)/
-          optparse! Shellwords.split($1)
+          @opt.update_args Shellwords.split($1)
         end
       } unless @opt.ignore_pragma
 
@@ -258,8 +169,8 @@ module RstFilter
       lrs
     end
 
-    def process filename
-      records, src, comments = record_records filename
+    def process
+      records, src, comments = record_records
       pp records: records if @opt.verbose
       line_records = records.map{|r|
         make_line_records r
@@ -288,6 +199,8 @@ module RstFilter
               puts_result $1, line_results, line
             elsif @opt.show_all_results
               puts_result line, line_results
+            else
+              puts line
             end
           end
 
@@ -325,8 +238,9 @@ end
 
 if $0 == __FILE__
   require_relative 'rewriter'
-  filter = RstFilter::Exec.new
-  filter.optparse! ['-v']
+
   file = ARGV.shift || File.expand_path(__dir__ + '/../../sample.rb')
-  filter.process File.expand_path(file)
+  RstFilter::Config.set_default! %w(-v)
+  filter = RstFilter::Exec.new file
+  filter.process
 end

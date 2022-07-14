@@ -86,7 +86,7 @@ if path = ENV['RSTFILTER_RECORD_PATH']
     RST_MOD_SRC = File.read(ENV['RSTFILTER_MOD_SRC_PATH'])
     @found = false
     def self.translate iseq
-      if !@found && iseq.path == RST_FILENAME && iseq.label == "<main>"
+      if !@found && iseq.path == RST_FILENAME && (iseq.label == "<main>" || iseq.label == '<top (required)>')
         @found = true
         RubyVM::InstructionSequence.compile RST_MOD_SRC, RST_FILENAME
       end

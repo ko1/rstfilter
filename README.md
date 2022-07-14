@@ -48,14 +48,17 @@ Usage: rstfilter [options] SCRIPT
         --comment-indent=NUM         Specify comment indent size (default: 50)
         --comment-pattern=PAT        Specify comment pattern of -c (default: '#=>')
         --coment-label=LABEL         Specify comment label (default: "")
-    -e, --command=COMMAND            Execute Ruby script with given command
+    -e, --executable=COMMAND         Execute Ruby script with given command
         --no-filename                Execute -e command without filename
     -j, --json                       Print records in JSON format
         --ignore-pragma              Ignore pragma specifiers
+        --rc RCFILE                  Load RCFILE
         --verbose                    Verbose mode
 ```
 
-Note that you can specify multiple `-e` options like that:
+### `-e` option
+
+You can specify multiple `-e` options like that:
 
 ```
 $ rstfilter -o sample.rb -eruby27:/home/ko1/.rbenv/versions/2.7.6/bin/ruby -e ruby30:/home/ko1/.rbenv/versions/3.0.4/bin/ruby
@@ -77,6 +80,43 @@ puts "Hello" * c
 
 On this case, you can check results on multiple Ruby interpreters.
 
+### Comment style options
+
+You can write above options in the script with `#rstfilter ARGS...` comment.
+
+```ruby
+#rstfilter -c
+a = 1
+b = 2
+c = a + b #=>
+```
+
+```
+$ rstfilter sample.rb
+#rstfilter -c
+a = 1
+b = 2
+c = a + b #=> 3
+```
+
+### RC file
+
+You can specify rcfile in YAML file.
+
+```yaml
+# rstfilter.yaml
+default: -c
+dir:
+  '*/spec/*': -e rspec
+```
+
+rcfile accept two keys:
+
+* `default`: set default option
+* `dir`: pairs of a pattern and a option.
+
+In this case, `deafult` option is `-c` and ` match files with the `*/spec/*` pattern applied with the given `-e rspec` option.
+
 ## Advanced demo
 
 https://user-images.githubusercontent.com/9558/170426066-e0c19185-10e9-4932-a1ce-3088a4189b34.mp4
@@ -95,13 +135,13 @@ With parser gem, rstfilter translates the given script and run it.
 For example, the first example is translated to:
 
 ```ruby
-(a = (1).__rst_record__(1, 5)).__rst_record__(1, 5)
-(b = (2).__rst_record__(2, 5)).__rst_record__(2, 5)
-(c = (a + b).__rst_record__(3, 9)).__rst_record__(3, 9)
-(puts "Hello" * c).__rst_record__(4, 16)
+a = ::RSTFILTER__.record(1,4,1,5){1}
+b = ::RSTFILTER__.record(2,4,2,5){2}
+c = ::RSTFILTER__.record(3,4,3,9){::RSTFILTER__.record(3,4,3,5){a} + ::RSTFILTER__.record(3,8,3,9){b}}
+::RSTFILTER__.record(4,0,4,16){puts ::RSTFILTER__.record(4,5,4,16){::RSTFILTER__.record(4,5,4,12){"Hello"} * ::RSTFILTER__.record(4,15,4,16){c}}}
 ```
 
-and `__rst_record__` method records the results. After that, rstfilter prints the script with the results.
+and `::RSTFILTER__.record` method records the results. After that, rstfilter prints the script with the results.
 `--verbose` option shows the translated script and collected results.
 
 ## Contribution
