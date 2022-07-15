@@ -20,7 +20,8 @@ module RstFilter
 
     # execute options
     exec_command: nil,
-    exec_with_filename: true,
+    command_format: '%e %f',
+    cursor_line: nil,
 
     # dump
     dump: nil, # :json
@@ -150,8 +151,13 @@ module RstFilter
 
         opt[:exec_command] << cmd
       }
-      o.on('--no-filename', 'Execute -e command without filename'){
-        opt[:exec_with_filename] = false
+      o.on('--command-format=FORMAT', "Execute parameters",
+                                           "Default: '%e %f'",
+                                           "Specifiers:",
+                                           "  %e: executable",
+                                           "  %f: given file",
+                                           "  %l: line"){|fmt|
+        opt[:command_format] = fmt
       }
       o.on('-j', '--json', 'Print records in JSON format'){
         opt[:dump] = :json
@@ -159,9 +165,12 @@ module RstFilter
       o.on('--ignore-pragma', 'Ignore pragma specifiers'){
         opt[:ignore_pragma] = true
       }
-      o.on('--rc RCFILE', 'Load RCFILE') do |file|
+      o.on('--rc RCFILE', 'Load RCFILE'){|file|
         Config.load_rc file
-      end
+      }
+      o.on('--cursor-line=LINE'){|line|
+        opt[:cursor_line] = line
+      }
       o.on('--verbose', 'Verbose mode'){
         opt[:verbose] = true
       }

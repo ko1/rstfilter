@@ -80,7 +80,7 @@ module RstFilter
       # execute modified src
       ENV['RSTFILTER_SHOW_OUTPUT'] = @opt.show_output ? '1' : nil
       ENV['RSTFILTER_SHOW_EXCEPTIONS'] = @opt.show_exceptions ? '1' : nil
-      ENV['RSTFILTER_FILENAME'] = @filename
+      ENV['RSTFILTER_FILENAME'] = File.expand_path(@filename)
       ENV['RSTFILTER_PP'] = @opt.use_pp ? '1' : nil
 
       case cs = @opt.exec_command
@@ -100,8 +100,19 @@ module RstFilter
 
           ENV['RUBYOPT'] = "-r#{File.join(__dir__, 'exec_setup')} #{ENV['RUBYOPT']}"
 
-          cmd = c.command
-          cmd << ' ' + @filename if @opt.exec_with_filename
+          cmd = @opt.command_format.gsub(/(%e|%f|%l|%%)/){|sub|
+            case sub
+            when '%%'
+              '%'
+            when '%e'
+              c.command
+            when '%f'
+              @filename
+            when '%l'
+              @opt.cursor_line || 0
+            end
+          }
+
           p exec:cmd if @opt.verbose
 
           io = IO.popen(cmd, err: [:child, :out])

@@ -85,6 +85,7 @@ if path = ENV['RSTFILTER_RECORD_PATH']
     RST_FILENAME = ENV['RSTFILTER_FILENAME']
     RST_MOD_SRC = File.read(ENV['RSTFILTER_MOD_SRC_PATH'])
     @found = false
+
     def self.translate iseq
       if !@found && iseq.path == RST_FILENAME && (iseq.label == "<main>" || iseq.label == '<top (required)>')
         @found = true
