@@ -12,6 +12,13 @@ class RewriteTest < Minitest::Test
 
   def mod_src_check src, filename = nil
     begin
+      RubyVM::AbstractSyntaxTree.parse(src)
+    rescue SyntaxError
+      # skip non-ruby code
+      return
+    end
+
+    begin
       mod_src, _comments = @rewriter.rewrite src, filename
       ast = RubyVM::AbstractSyntaxTree.parse(mod_src)
     rescue Parser::SyntaxError, EncodingError
