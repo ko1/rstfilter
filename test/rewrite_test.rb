@@ -12,7 +12,14 @@ class RewriteTest < Minitest::Test
 
   def mod_src_check src, filename = nil
     begin
-      RubyVM::AbstractSyntaxTree.parse(src)
+      # ideally we'd use Ruby's actual parser to check that the code we've
+      # generated is parseable, but that's not possible unless
+      # RubyVM::AbstractSyntaxTree.parse is defined, which is only on MRI
+      if defined?(RubyVM::AbstractSyntaxTree.parse)
+        RubyVM::AbstractSyntaxTree.parse(src)
+      else
+        Parser::CurrentRuby.parse(src)
+      end
     rescue SyntaxError
       # skip non-ruby code
       return
@@ -20,7 +27,13 @@ class RewriteTest < Minitest::Test
 
     begin
       mod_src, _comments = @rewriter.rewrite src, filename
-      ast = RubyVM::AbstractSyntaxTree.parse(mod_src)
+
+      # as above, we can only use RubyVM::AbstractSyntaxTree.parse on MRI
+      if defined?(RubyVM::AbstractSyntaxTree.parse)
+        ast = RubyVM::AbstractSyntaxTree.parse(mod_src)
+      else
+        ast = Parser::CurrentRuby.parse(mod_src)
+      end
     rescue Parser::SyntaxError, EncodingError
       # memo: https://github.com/whitequark/parser/issues/854
       ast = true
