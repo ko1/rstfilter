@@ -8,7 +8,13 @@ rescue LoadError
 end
 
 RstFilter::Config.set_default! ARGV
-ARGV.each{|name|
-  f = RstFilter::Exec.new name
+
+if ARGV.empty?
+  f = RstFilter::Exec.new "STDIN", $stdin.read
   f.process
-}
+else
+  ARGV.each{|name|
+    f = RstFilter::Exec.new name
+    f.process
+  }
+end
